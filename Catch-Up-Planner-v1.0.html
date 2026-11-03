@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Catch-Up Planner</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg:#0b1020; --card:#151d33; --card2:#1b2540; --field:#0f172a; --line:#2a3656;
+    --fg:#e8ecf5; --muted:#9aa8c7; --soft:#c7d2fe; --good:#6ee7b7; --err:#fca5a5; --focus:#fbbf24;
+    --a1:#4f46e5; --a2:#7c3aed;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; font:16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color:var(--fg);
+         background: radial-gradient(1100px 520px at 8% -8%, #1e1b4b 0%, transparent 62%), radial-gradient(900px 480px at 100% 0%, #0c2a3a 0%, transparent 55%), var(--bg); }
+  header { max-width:1000px; margin:0 auto; padding:34px 24px 10px; }
+  header h1 { margin:0; font-size:1.9rem; letter-spacing:-.02em; color:#e0e7ff; }
+  @supports (background-clip:text) or (-webkit-background-clip:text) {
+    header h1 { background:linear-gradient(90deg,#c7d2fe,#67e8f9); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  }
+  header p { margin:6px 0 0; color:var(--muted); max-width:70ch; }
+  main { max-width:1000px; margin:0 auto; padding:14px 24px 56px; display:grid; gap:16px; }
+  section.card { background:linear-gradient(180deg,var(--card2),var(--card)); border:1px solid var(--line); border-radius:14px; padding:18px 22px;
+                 box-shadow:0 10px 30px rgba(0,0,0,.28); animation:rise .35s ease both; }
+  @keyframes rise { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion: reduce) { section.card { animation:none; } button { transition:none !important; } }
+  h2 { margin:0 0 12px; font-size:1.05rem; letter-spacing:.01em; color:#fff; }
+  .card-head { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .card-head h2 { margin:0; }
+  .summary { flex:1; min-width:200px; color:var(--good); font-weight:600; }
+  #importBody { margin-top:14px; }
+  .collapsible-body[hidden] { display:none; }
+  .section-toggle { margin-left:auto; }
+  .progress-wrap { margin:12px 0 18px; }
+  .progress-label { display:flex; justify-content:space-between; gap:12px; color:var(--muted); font-size:.9rem; margin-bottom:6px; }
+  .progress-track { height:14px; background:#0b1020; border:1px solid #44527a; border-radius:999px; overflow:hidden; }
+  .progress-fill { height:100%; width:0; background:linear-gradient(90deg,#4f46e5,#67e8f9); transition:width .2s ease; }
+  .queue { margin:12px 0; padding-left:22px; }
+  .queue li { padding:4px 0; }
+  .preview { border:1px solid #44527a; border-radius:10px; padding:12px; margin-top:12px; background:rgba(15,23,42,.65); }
+  .queue-actions { margin-top:10px; }
+  .student-tabs { display:flex; gap:8px; flex-wrap:wrap; margin:14px 0 18px; padding-bottom:10px; border-bottom:1px solid var(--line); }
+  .student-tab[aria-selected="true"] { background:linear-gradient(135deg,#0891b2,#4f46e5); border-color:#a5b4fc; }
+  .plan-assignment-actions { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:6px; }
+  .remove-assignment { padding:4px 9px; font-size:.82rem; }
+  .plan-empty { padding:12px 0; color:var(--muted); }
+  .danger { color:#fecaca; border-color:#7f1d1d !important; }
+  #studentSearch { min-width:220px; flex:1; }
+
+  button { font:inherit; font-weight:600; padding:9px 16px; border-radius:10px; border:1px solid transparent; color:#fff; cursor:pointer;
+           background:linear-gradient(135deg,var(--a1),var(--a2)); transition:filter .15s, transform .05s; }
+  button:hover { filter:brightness(1.12); }
+  button:active { transform:translateY(1px); }
+  button.secondary { background:transparent; color:var(--soft); border-color:#44527a; }
+  button.secondary:hover { background:rgba(165,180,252,.1); filter:none; }
+  button:focus-visible, input:focus-visible, select:focus-visible, .dropzone:focus-visible { outline:3px solid var(--focus); outline-offset:2px; }
+
+  select, input[type=text] { font:inherit; padding:9px 12px; border:1px solid #34425f; border-radius:10px; background:var(--field); color:var(--fg); }
+  select { min-width:320px; max-width:100%; }
+  input::placeholder { color:#7384a8; }
+  input[type=checkbox] { accent-color:#818cf8; }
+  input[type=file] { color:var(--muted); }
+  input[type=file]::file-selector-button { font:inherit; font-weight:600; margin-right:12px; padding:8px 14px; border-radius:10px; border:1px solid #44527a; background:transparent; color:var(--soft); cursor:pointer; }
+  input[type=file]::file-selector-button:hover { background:rgba(165,180,252,.1); }
+
+  .dropzone { border:2px dashed #4b5a86; border-radius:14px; padding:34px 24px; text-align:center; background:rgba(99,102,241,.07); transition:background .15s, border-color .15s; }
+  .dropzone:hover { border-color:var(--soft); }
+  .dropzone.drag { background:rgba(99,102,241,.2); border-color:var(--soft); }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+  .muted { color:var(--muted); font-size:.9rem; }
+  .error { color:var(--err); font-weight:600; }
+
+  table { border-collapse:collapse; width:100%; }
+  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); }
+  th { background:#111a30; color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.06em; position:sticky; top:0; }
+  tbody tr:hover { background:rgba(255,255,255,.03); }
+  .scroll { max-height:340px; overflow:auto; border:1px solid var(--line); border-radius:12px; }
+
+  h3 { color:#fff; font-size:1.25rem; }
+  .stat { display:inline-block; margin-right:28px; color:var(--muted); font-size:.85rem; }
+  .stat b { font-size:1.7rem; color:var(--fg); line-height:1.3; }
+  ol.todo { padding-left:0; list-style:none; }
+  ol.todo li { display:flex; gap:12px; align-items:flex-start; padding:12px 6px; border-bottom:1px solid var(--line); }
+  ol.todo input[type=checkbox] { width:22px; height:22px; margin-top:3px; }
+  ol.todo li.done label { text-decoration:line-through; color:var(--muted); }
+  .pill { background:rgba(129,140,248,.16); color:var(--soft); border:1px solid rgba(129,140,248,.3); border-radius:99px; padding:1px 10px; font-size:.82rem; white-space:nowrap; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Catch-Up Planner</h1>
+  <p>Import a Google Classroom grades CSV and print a prioritized to-do list of missing work for a student. Everything runs in your browser; no data is uploaded anywhere.</p>
+</header>
+
+<main>
+  <section class="card" id="importCard" aria-labelledby="h-import">
+    <div class="card-head">
+      <h2 id="h-import">1. Import grades</h2>
+      <span id="importSummary" class="summary" role="status" hidden></span>
+      <button id="importToggle" type="button" class="secondary" aria-expanded="true" aria-controls="importBody" hidden>Change file</button>
+    </div>
+    <div id="importBody">
+      <div id="drop" class="dropzone" tabindex="0" aria-label="Choose or drop a CSV file">
+        <p><strong>Drop a Google Classroom grades CSV here</strong>, or</p>
+        <input id="file" type="file" accept=".csv,text/csv" aria-label="Grades CSV file">
+      </div>
+      <p id="msg" class="error" role="alert"></p>
+    </div>
+  </section>
+
+  <section class="card" id="pick" hidden aria-labelledby="h-pick">
+    <div class="card-head"><h2 id="h-pick">2. Choose students</h2><span id="pickSummary" class="summary">Choose a student to begin.</span><button id="pickToggle" type="button" class="secondary section-toggle" aria-expanded="true" aria-controls="pickBody">Collapse</button></div>
+    <div id="pickBody" class="collapsible-body">
+      <div class="row" style="margin-top:14px">
+        <input id="studentSearch" type="text" placeholder="Search students…" aria-label="Search students">
+        <select id="studentSel" aria-label="Choose a student"></select>
+        <button id="addNextBtn" type="button">Add &amp; next student</button>
+      </div>
+      <p class="muted">Add each student to the print queue. “Add &amp; next student” moves to the next student with missing work.</p>
+      <div class="preview" id="queuePanel"><strong>Print queue</strong><p class="muted">No students added yet.</p></div>
+      <div class="row queue-actions"><button id="printQueueBtn" type="button" disabled>Download queued plans</button><button id="clearQueueBtn" type="button" class="secondary">Clear queue</button></div>
+      <p class="muted">Queued students print as separate pages in one file. Open it and choose Print or Save as PDF.</p>
+    </div>
+  </section>
+
+  <section class="card" id="setup" hidden aria-labelledby="h-setup">
+    <div class="card-head"><h2 id="h-setup">3. Check assignments</h2><span id="setupSummary" class="summary">Assignments included</span><button id="setupToggle" type="button" class="secondary section-toggle" aria-expanded="false" aria-controls="setupBody">Edit</button></div>
+    <div id="setupBody" class="collapsible-body" hidden>
+      <p class="muted" style="margin-top:12px">Uncheck anything that shouldn't count.</p>
+      <div class="row" style="margin-bottom:8px"><label><input type="checkbox" id="zeroMissing"> Treat a score of 0 as missing</label></div>
+      <div class="row" style="margin-bottom:8px"><label><input type="checkbox" id="uncheckAll"> Uncheck all assignments</label></div>
+      <div class="scroll"><table id="asgTable"><thead><tr><th>Include</th><th>Assignment</th><th>Date</th><th>Total points</th><th>Grade weight</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <section class="card" id="plan" hidden aria-labelledby="h-plan">
+    <h2 id="h-plan">4. Catch-up plans</h2>
+    <div class="row" style="margin-bottom:12px">
+      <label>Note to print on the plans (optional): <input id="teacherNote" type="text" size="44" placeholder="e.g., Turn in by Friday to Ms. Smith"></label>
+      <button id="startOverBtn" type="button" class="secondary danger">Start over</button>
+    </div>
+    <p class="muted">Select a student tab to review their plan. You can remove assignments from one student's plan without changing other students' plans.</p>
+    <div id="planTabs" class="student-tabs" role="tablist" aria-label="Student catch-up plans"></div>
+    <div id="detail" aria-live="polite"></div>
+  </section>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const state = { assignments: [], students: [], zeroAsMissing: false, sel: '', activePlan: '', comments: {}, queue: [], excludedByStudent: {} };
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt = n => (Math.round(n * 10) / 10).toString();
+
+/* ---------- CSV parsing ---------- */
+function parseCSV(text) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i+1] === '"') { cell += '"'; i++; } else q = false; }
+      else cell += c;
+    } else if (c === '"') q = true;
+    else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i+1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += c;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim() !== ''));
+}
+
+/* ---------- Load + automatically detect CSV structure ----------
+   Supported layouts:
+   A) Google Classroom export: row 1 = dates, row 2 = assignment names, row 3 = points, students in row 4+.
+   B) Header-first export: row 1 = student-field and assignment names, row 2 = dates, row 3 = points, students in row 4+.
+*/
+function detectMeta(labels) {
+  const meta = { first: -1, last: -1, name: -1, email: -1 };
+  labels.forEach((h, i) => {
+    h = (h || '').trim();
+    if (/^(first|given)( name)?$/i.test(h)) meta.first = i;
+    else if (/^(last|family)( name)?$|^surname$/i.test(h)) meta.last = i;
+    else if (/^(student|name|student name|full name)$/i.test(h)) meta.name = i;
+    else if (/e-?mail/i.test(h)) meta.email = i;
+  });
+  return meta;
+}
+
+function loadCSV(text, fileName) {
+  $('#msg').textContent = '';
+  const rows = parseCSV(text);
+  if (rows.length < 4) return fail('Expected at least 4 rows: dates/header, assignment names, total points, then students.');
+
+  const firstRow = rows[0].map(v => (v || '').trim());
+  const secondRow = rows[1].map(v => (v || '').trim());
+  const headerMeta = detectMeta(firstRow);
+  const headerFirst = headerMeta.first >= 0 || headerMeta.last >= 0 || headerMeta.email >= 0;
+
+  let dateRow, nameRow, ptsRow, studentRows, metaIdx, nameOf, labelOf;
+  if (headerFirst) {
+    // Header-first export, such as Last Name / First Name / Email Address / assignments...
+    nameRow = rows[0];
+    dateRow = rows[1];
+    ptsRow = rows[2];
+    studentRows = rows.slice(3);
+    metaIdx = new Set();
+    [headerMeta.first, headerMeta.last, headerMeta.name, headerMeta.email].forEach(i => { if (i >= 0) metaIdx.add(i); });
+    // Recognize common fixed student-information columns even if their labels vary slightly.
+    firstRow.forEach((h, i) => { if (/^(last name|first name|given name|email address|e-?mail|student id)$/i.test(h)) metaIdx.add(i); });
+    if (metaIdx.size === 0) metaIdx.add(0);
+    const firstIdx = headerMeta.first;
+    const lastIdx = headerMeta.last;
+    const fullIdx = headerMeta.name;
+    nameOf = r => {
+      if (fullIdx >= 0 && (r[fullIdx] || '').trim()) return (r[fullIdx] || '').trim();
+      const parts = [];
+      if (firstIdx >= 0 && (r[firstIdx] || '').trim()) parts.push(r[firstIdx].trim());
+      if (lastIdx >= 0 && (r[lastIdx] || '').trim()) parts.push(r[lastIdx].trim());
+      // For exports with only a last-name column and no recognized first-name header.
+      if (!parts.length) {
+        const idx = [...metaIdx].find(i => i !== headerMeta.email);
+        if (idx !== undefined) return (r[idx] || '').trim();
+      }
+      return parts.join(' ');
+    };
+    labelOf = nameOf;
+  } else {
+    // Classic export: dates first, assignment names second, points third; student name in column B.
+    dateRow = rows[0];
+    nameRow = rows[1];
+    ptsRow = rows[2];
+    studentRows = rows.slice(3);
+    const legacyMeta = new Set([0, 1]);
+    [detectMeta(nameRow), detectMeta(dateRow)].forEach(m => Object.values(m).forEach(i => { if (i >= 0) legacyMeta.add(i); }));
+    metaIdx = legacyMeta;
+    nameOf = r => (r[1] || '').trim();
+    labelOf = nameOf;
+  }
+
+  const skip = /^(overall|total|course|final|average|grade|percent)/i;
+  const assignments = [];
+  nameRow.forEach((value, col) => {
+    const name = (value || '').trim();
+    if (metaIdx.has(col) || !name || skip.test(name)) return;
+    const raw = (ptsRow[col] || '').trim();
+    const parsed = Number.parseFloat(raw);
+    const guessed = !Number.isFinite(parsed);
+    const pts = guessed ? 100 : parsed;
+    assignments.push({ col, name, date: (dateRow[col] || '').trim(), pts, include: true, ptsGuessed: guessed });
+  });
+  if (!assignments.length) return fail('No assignment names were found. Check that the CSV includes assignment titles and a total-points row.');
+
+  const studentList = studentRows
+    .filter(r => {
+      const n = nameOf(r);
+      return n && !/^(class )?average$/i.test(n);
+    })
+    .map(r => ({ name: nameOf(r), label: labelOf(r), cells: r }));
+  if (!studentList.length) return fail('No student rows were found below row 3. Check the student-name columns in the CSV.');
+
+  const dated = assignments.map(a => a.date).filter(Boolean);
+  const dateSummary = dated.length ? `Dates detected: ${dated[0]} to ${dated[dated.length - 1]}` : 'No assignment dates detected.';
+  const preview = `Import preview\n\nFile: ${fileName || 'Grades file'}\nFormat detected: ${headerFirst ? 'Header-first grade export' : 'Dates-first grade export'}\nAssignments detected: ${assignments.length}\nStudents detected: ${studentList.length}\n${dateSummary}\n\nAccept this import?`;
+  if (!window.confirm(preview)) return;
+
+  state.assignments = assignments;
+  state.students = studentList;
+  state.sel = '';
+  state.activePlan = '';
+  state.comments = {};
+  state.queue = [];
+  state.excludedByStudent = {};
+  $('#pick').hidden = false; $('#setup').hidden = false; $('#plan').hidden = false;
+  renderSetup(); renderAll();
+  $('#importSummary').textContent = `✓ ${fileName || 'Grades file'} · ${studentList.length} student${studentList.length === 1 ? '' : 's'} · ${assignments.length} assignment${assignments.length === 1 ? '' : 's'}`;
+  $('#importSummary').hidden = false;
+  $('#importToggle').hidden = false;
+  setImportCollapsed(true);
+}
+function fail(m) { setImportCollapsed(false); $('#msg').textContent = m; }
+
+// Step 1 folds away once a file has loaded; "Change file" opens it again.
+function setImportCollapsed(c) {
+  $('#importBody').hidden = c;
+  const t = $('#importToggle');
+  t.setAttribute('aria-expanded', String(!c));
+  t.textContent = c ? 'Change file' : 'Hide';
+}
+
+/* ---------- Analysis ---------- */
+function analyze(s, studentIndex = null) {
+  // Individual plan removals affect the checklist only, not the student's grade.
+  const excluded = studentIndex === null ? new Set() : new Set(state.excludedByStudent[studentIndex] || []);
+  const gradeAssignments = state.assignments.filter(a => a.include);
+  let gradedTotal = 0, earned = 0, missingPoints = 0;
+  const missingAll = [];
+  gradeAssignments.forEach(a => {
+    const raw = (s.cells[a.col] || '').trim();
+    const n = parseFloat(raw);
+    if (/excused/i.test(raw)) return;
+    const isMissing = raw === '' || /^(missing|no grade|unsubmitted)$/i.test(raw) ||
+      (state.zeroAsMissing && Number.isFinite(n) && n === 0);
+    if (isMissing) {
+      missingPoints += a.pts || 0;
+      missingAll.push({ name: a.name, date: a.date, col: a.col, pts: a.pts || 0 });
+    } else if (Number.isFinite(n)) {
+      gradedTotal += a.pts || 0;
+      earned += n;
+    }
+  });
+  const now = gradedTotal > 0 ? earned / gradedTotal * 100 : 0;
+  const missing = missingAll.filter(m => !excluded.has(m.col));
+  const potentialDenominator = gradedTotal + missingPoints;
+  missing.forEach(m => m.impact = potentialDenominator > 0 ? m.pts / potentialDenominator * 100 : 0);
+  missing.sort((a, b) => b.impact - a.impact || a.name.localeCompare(b.name));
+  const gain = missing.reduce((t, m) => t + m.impact, 0);
+  const max = potentialDenominator > 0 ? (earned + missingPoints) / potentialDenominator * 100 : now;
+  return { now, gain, max, missing };
+}
+const sortedIdx = () => state.students.map((_, i) => i)
+  .sort((a, b) => state.students[a].label.localeCompare(state.students[b].label));
+
+/* ---------- Rendering ---------- */
+function renderSetup() {
+  const tb = $('#asgTable tbody'); tb.innerHTML = '';
+  const included = state.assignments.filter(a => a.include).length;
+  $('#setupSummary').textContent = `${included} assignments included · Edit`; 
+  const includedPoints = state.assignments.filter(a => a.include).reduce((sum, a) => sum + (a.pts || 0), 0);
+  state.assignments.forEach(a => {
+    const tr = document.createElement('tr');
+    const weight = a.include && includedPoints > 0 ? (a.pts / includedPoints * 100) : 0;
+    tr.innerHTML = `<td><input type="checkbox" ${a.include ? 'checked' : ''} aria-label="Include ${esc(a.name)}"></td>
+      <td>${esc(a.name)}</td>
+      <td>${a.date ? esc(a.date) : '<span class="muted">&mdash;</span>'}</td>
+      <td>${fmt(a.pts)}${a.ptsGuessed ? ' <span class="muted">(assumed)</span>' : ''}</td>
+      <td>${fmt(weight)}%</td>`;
+    tr.querySelector('input[type=checkbox]').onchange = e => { a.include = e.target.checked; $('#uncheckAll').checked = state.assignments.every(item => !item.include); renderSetup(); renderAll(); };
+    tb.appendChild(tr);
+  });
+}
+
+function renderAll() { renderPicker(); renderQueue(); renderPlanTabs(); renderDetail(); }
+
+function renderPicker() {
+  const order = sortedIdx();
+  const withMissing = order.filter(i => analyze(state.students[i]).missing.length);
+  let h = '<option value="">Choose a student…</option>';
+  const query = ($('#studentSearch')?.value || '').trim().toLowerCase();
+  order.forEach(i => {
+    const n = analyze(state.students[i]).missing.length;
+    if (query && !state.students[i].label.toLowerCase().includes(query)) return;
+    h += `<option value="${i}">${esc(state.students[i].label)} — ${n} missing</option>`;
+  });
+  const sel = $('#studentSel');
+  sel.innerHTML = h;
+  sel.value = state.sel;
+}
+
+function renderPlanTabs() {
+  const tabs = $('#planTabs');
+  if (!tabs) return;
+  // Only students currently in the print queue get a plan tab.
+  const order = state.queue.slice().sort((a, b) =>
+    state.students[a].label.localeCompare(state.students[b].label)
+  );
+  if (!order.includes(+state.activePlan)) {
+    state.activePlan = order.length ? String(order[0]) : '';
+  }
+  tabs.innerHTML = order.map(i =>
+    `<button type="button" class="secondary student-tab" role="tab" id="plan-tab-${i}" aria-selected="${String(state.activePlan === String(i))}" aria-controls="detail" data-student-index="${i}">${esc(state.students[i].label)}</button>`
+  ).join('');
+  tabs.querySelectorAll('.student-tab').forEach(tab => tab.onclick = () => {
+    state.activePlan = tab.dataset.studentIndex;
+    renderPlanTabs(); renderDetail();
+  });
+}
+
+function renderDetail() {
+  const d = $('#detail');
+  const tabs = $('#planTabs');
+  if (state.activePlan === '' || !state.students[+state.activePlan]) {
+    d.innerHTML = state.students.length ? '<p class="muted">Add a student to the print queue above to open their catch-up plan here.</p>' : '<p class="muted">Import a grades file to view student catch-up plans.</p>';
+    if (tabs) tabs.innerHTML = '';
+    return;
+  }
+  const i = +state.activePlan;
+  const s = state.students[i], a = analyze(s, i);
+  const excluded = new Set(state.excludedByStudent[i] || []);
+  const excludedAssignments = state.assignments.filter(asg => asg.include && excluded.has(asg.col));
+  d.innerHTML = `<h3 style="margin-top:0">${esc(s.name)}</h3>
+    <p><span class="stat">Grade now<br><b>${fmt(a.now)}%</b></span>
+       <span class="stat">If caught up<br><b>${fmt(a.max)}%</b></span>
+       <span class="stat">Missing<br><b>${a.missing.length}</b></span></p>
+    <div class="progress-wrap"><div class="progress-label"><span>Current grade</span><strong>${fmt(a.now)}%</strong></div><div class="progress-track" role="progressbar" aria-label="Current grade" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.max(0, Math.min(100, a.now))}"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, a.now))}%"></div></div>
+    <div class="progress-label" style="margin-top:8px"><span>Potential grade if caught up</span><strong>${fmt(a.max)}%</strong></div><div class="progress-track" role="progressbar" aria-label="Potential grade if caught up" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.max(0, Math.min(100, a.max))}"><div class="progress-fill" style="width:${Math.max(0, Math.min(100, a.max))}%;background:linear-gradient(90deg,#059669,#6ee7b7)"></div></div></div>
+    ${a.missing.length ? `<ol class="todo">${a.missing.map((m, k) => `
+      <li><div style="flex:1"><label>${esc(m.name)}${m.date ? ' <span class="muted">(' + esc(m.date) + ')</span>' : ''} <span class="pill">${fmt(m.pts)} pts</span> <span class="pill">+${fmt(m.impact)}% of grade</span></label>
+        <div class="plan-assignment-actions"><input type="text" class="cmtIn" data-col="${m.col}" value="${esc(state.comments[i + ':' + m.col] || '')}" placeholder="Add a comment (optional)" aria-label="Comment for ${esc(m.name)}" style="flex:1;min-width:180px;font:inherit;padding:4px 6px"><button type="button" class="secondary danger remove-assignment" data-col="${m.col}">Remove from this plan</button></div></div></li>`).join('')}</ol>`
+      : '<p><strong>All caught up!</strong> No missing work in this plan.</p>'}
+    ${excludedAssignments.length ? `<div class="preview"><strong>Removed from ${esc(s.name)}’s plan (${excludedAssignments.length})</strong><ul>${excludedAssignments.map(asg => `<li>${esc(asg.name)} <button type="button" class="secondary restore-assignment" data-col="${asg.col}">Restore</button></li>`).join('')}</ul><p class="muted">These assignments are excluded only from this student’s plan and grade estimate.</p></div>` : ''}`;
+  d.querySelectorAll('.cmtIn').forEach(inp => inp.oninput = () => { state.comments[i + ':' + inp.dataset.col] = inp.value; });
+  d.querySelectorAll('.remove-assignment').forEach(btn => btn.onclick = () => {
+    const col = +btn.dataset.col;
+    const removed = new Set(state.excludedByStudent[i] || []); removed.add(col); state.excludedByStudent[i] = [...removed];
+    renderAll();
+  });
+  d.querySelectorAll('.restore-assignment').forEach(btn => btn.onclick = () => {
+    const col = +btn.dataset.col;
+    state.excludedByStudent[i] = (state.excludedByStudent[i] || []).filter(value => value !== col);
+    renderAll();
+  });
+}
+function addToQueue(i) {
+  if (!Number.isInteger(i) || i < 0 || i >= state.students.length) return;
+  if (!state.queue.includes(i)) state.queue.push(i);
+  if (state.activePlan === '') state.activePlan = String(i);
+  renderQueue(); renderPlanTabs(); renderDetail();
+}
+function renderQueue() {
+  const panel = $('#queuePanel');
+  if (!panel) return;
+  if (!state.queue.length) panel.innerHTML = '<strong>Print queue</strong><p class="muted">No students added yet.</p>';
+  else panel.innerHTML = `<strong>Print queue (${state.queue.length})</strong><ol class="queue">${state.queue.map(i => `<li>${esc(state.students[i].label)} <button type="button" class="secondary removeQueue" data-index="${i}">Remove</button></li>`).join('')}</ol>`;
+  $('#printQueueBtn').disabled = !state.queue.length;
+  panel.querySelectorAll('.removeQueue').forEach(b => b.onclick = () => { state.queue = state.queue.filter(i => i !== +b.dataset.index); renderQueue(); renderPlanTabs(); renderDetail(); });
+  $('#pickSummary').textContent = state.queue.length ? `${state.queue.length} student${state.queue.length === 1 ? '' : 's'} queued` : 'Choose a student to begin.';
+}
+function nextStudent() {
+  $('#studentSearch').value = '';
+  const order = sortedIdx();
+  const current = state.sel === '' ? -1 : +state.sel;
+  const candidates = order.filter(i => analyze(state.students[i]).missing.length && !state.queue.includes(i));
+  if (!candidates.length) { $('#studentSearch').value = ''; renderPicker(); $('#studentSel').value = ''; state.sel = ''; renderDetail(); return; }
+  const next = candidates.find(i => i > current) ?? candidates[0];
+  state.sel = String(next); renderPicker(); $('#studentSel').value = state.sel; renderDetail();
+}
+
+/* ---------- Printing ---------- */
+function sheetHTML(i) {
+  const s = state.students[i];
+  const a = analyze(s, i), note = $('#teacherNote').value.trim();
+  const clamp = value => Math.max(0, Math.min(100, value));
+  return `<section class="sheet">
+    <h1>Catch-Up Plan: ${esc(s.name)}</h1>
+    <p class="plan-date">Plan created: ${new Date().toLocaleDateString()}</p>
+    <div class="grade-summary"><strong>Current grade: ${fmt(a.now)}%</strong><strong>Potential grade: ${fmt(a.max)}%</strong><strong>Possible increase: +${fmt(a.gain)}%</strong></div>
+    <div class="progress-wrap">
+      <div class="progress-label"><span>Current grade</span><strong>${fmt(a.now)}%</strong></div>
+      <div class="progress-track"><div class="progress-fill current-fill" style="width:${clamp(a.now)}%"></div></div>
+      <div class="progress-label"><span>Potential grade if caught up</span><strong>${fmt(a.max)}%</strong></div>
+      <div class="progress-track"><div class="progress-fill potential-fill" style="width:${clamp(a.max)}%"></div></div>
+    </div>
+    ${a.missing.length ? `<p>Complete these assignments in priority order. Green percentages show the potential grade increase.</p>
+    <ol>${a.missing.map(m => `<li><span class="box"></span><div class="assignment-copy"><strong class="assignment-title">${esc(m.name)}</strong><div class="assignment-meta">${m.date ? `<span>Date: ${esc(m.date)}</span>` : '<span>Date not listed</span>'}<span>${fmt(m.pts)} points</span><span class="increase">+${fmt(m.impact)}% of grade</span></div>${(state.comments[i + ':' + m.col] || '').trim() ? `<div class="cmt">${esc(state.comments[i + ':' + m.col].trim())}</div>` : ''}</div></li>`).join('')}</ol>`
+      : '<p class="caught-up"><strong>You are all caught up. Great work!</strong></p>'}
+    ${note ? `<div class="note">${esc(note)}</div>` : ''}
+  </section>`;
+}
+// Builds a standalone page that opens its own print dialog (works even when this page is
+// inside a preview/sandbox that blocks window.print()).
+function downloadPlans(indices) {
+  const css = `@page{margin:.65in}*{box-sizing:border-box}body{font:11pt/1.35 system-ui,Arial,sans-serif;color:#172033;margin:0;padding:0 .15in;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .sheet{page-break-after:always}.sheet:last-child{page-break-after:auto}h1{font-size:1.55em;color:#312e81;margin:0 0 2px}.plan-date{color:#64748b;margin:0 0 10px}
+    .grade-summary{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}.grade-summary strong{background:#eef2ff;border:1px solid #c7d2fe;border-radius:7px;padding:6px 9px;color:#312e81}
+    .progress-wrap{margin:10px 0 14px}.progress-label{display:flex;justify-content:space-between;gap:12px;font-size:9.5pt;margin:7px 0 3px;color:#334155}.progress-track{height:12px;border:1px solid #cbd5e1;background:#e2e8f0;border-radius:99px;overflow:hidden}.progress-fill{height:100%;min-width:0}.current-fill{background:#4f46e5}.potential-fill{background:#10b981}
+    ol{padding-left:0;list-style:none}li{display:flex;gap:10px;padding:9px 8px;border-bottom:1px solid #cbd5e1;break-inside:avoid}.box{width:1.05em;height:1.05em;border:2px solid #475569;flex:none;margin-top:.15em}.assignment-copy{flex:1}.assignment-title{display:block;font-size:11.5pt;color:#111827}.assignment-meta{display:flex;gap:8px 14px;flex-wrap:wrap;margin-top:3px;font-size:9.5pt;color:#475569}.increase{font-weight:700;color:#047857;background:#d1fae5;border-radius:4px;padding:1px 5px}.cmt{font-style:italic;color:#475569;margin-top:4px}.note{border:1px solid #94a3b8;background:#f8fafc;padding:8px;margin-top:16px}.caught-up{color:#047857;background:#d1fae5;padding:10px;border-radius:6px}`;
+  const doc = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Catch-Up Plans</title><style>${css}</style></head><body>${
+    indices.map(i => sheetHTML(i)).join('')}<script>window.onload=function(){window.print()}<\/script></body></html>`;
+  const url = URL.createObjectURL(new Blob([doc], { type: 'text/html' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = 'catch-up-plans.html';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+/* ---------- Wiring ---------- */
+$('#file').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) f.text().then(t => loadCSV(t, f.name)); };
+$('#importToggle').onclick = () => setImportCollapsed(!$('#importBody').hidden);
+const drop = $('#drop');
+['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+drop.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) f.text().then(t => loadCSV(t, f.name)); });
+$('#studentSel').onchange = e => { state.sel = e.target.value; if (state.sel !== '') state.activePlan = state.sel; renderPlanTabs(); renderDetail(); };
+$('#studentSearch').oninput = () => renderPicker();
+$('#addNextBtn').onclick = () => { if (state.sel !== '' && state.sel !== 'all') { addToQueue(+state.sel); state.activePlan = state.sel; renderPlanTabs(); renderDetail(); } nextStudent(); };
+$('#printQueueBtn').onclick = () => downloadPlans(state.queue.slice());
+$('#clearQueueBtn').onclick = () => { state.queue = []; state.activePlan = ''; renderQueue(); renderPlanTabs(); renderDetail(); };
+$('#pickToggle').onclick = () => { const body = $('#pickBody'); body.hidden = !body.hidden; $('#pickToggle').textContent = body.hidden ? 'Edit' : 'Collapse'; $('#pickToggle').setAttribute('aria-expanded', String(!body.hidden)); };
+$('#setupToggle').onclick = () => { const body = $('#setupBody'); body.hidden = !body.hidden; $('#setupToggle').textContent = body.hidden ? 'Edit' : 'Collapse'; $('#setupToggle').setAttribute('aria-expanded', String(!body.hidden)); };
+$('#startOverBtn').onclick = () => {
+  if (!window.confirm('Start over? This clears the loaded student records and print queue from this page.')) return;
+  state.assignments = []; state.students = []; state.zeroAsMissing = false; state.sel = ''; state.activePlan = ''; state.comments = {}; state.queue = []; state.excludedByStudent = {};
+  $('#file').value = ''; $('#msg').textContent = ''; $('#importSummary').hidden = true; $('#importToggle').hidden = true;
+  $('#pick').hidden = true; $('#setup').hidden = true; $('#plan').hidden = true; $('#studentSearch').value = '';
+  $('#zeroMissing').checked = false; $('#uncheckAll').checked = false; setImportCollapsed(false); $('#setupBody').hidden = true; $('#setupToggle').textContent = 'Edit';
+  $('#pickBody').hidden = false; $('#pickToggle').textContent = 'Collapse'; $('#teacherNote').value = '';
+};
+$('#zeroMissing').onchange = e => { state.zeroAsMissing = e.target.checked; renderAll(); };
+$('#uncheckAll').onchange = e => { if (e.target.checked) state.assignments.forEach(a => a.include = false); renderSetup(); renderAll(); };
+</script>
+</body>
+</html>
