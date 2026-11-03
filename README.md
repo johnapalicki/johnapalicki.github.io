@@ -1,4 +1,4 @@
-Google Classroom Catch-Up Generator
+<b>Google Classroom Catch-Up Generator</b>
 
 To use this tool, you must be assigned as a teacher to the classroom. 
 
